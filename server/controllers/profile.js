@@ -81,11 +81,13 @@ exports.deleteAccount = async (req, res) => {
     }
     // Now Delete User
     await User.findByIdAndDelete({ _id: id })
+    // Delete progress BEFORE responding, so a failure here is caught cleanly
+    // instead of causing a "headers already sent" error after the response.
+    await CourseProgress.deleteMany({ userId: id })
     res.status(200).json({
       success: true,
       message: "User deleted successfully",
     })
-    await CourseProgress.deleteMany({ userId: id })
   } catch (error) {
     console.log(error)
     res

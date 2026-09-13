@@ -24,8 +24,12 @@ exports.resetPasswordToken = async (req, res) => {
     )
     console.log("DETAILS", updatedDetails)
 
-    // const url = `http://localhost:3000/update-password/${token}`
-    const url = `https://codewithvermaji.vercel.app//update-password/${token}`
+    // Build the reset link from an env var so it works across environments,
+    // and without the accidental double slash the old hard-coded URL had.
+    const frontendUrl = (
+      process.env.FRONTEND_URL || "https://codewithvermaji.vercel.app"
+    ).replace(/\/+$/, "")
+    const url = `${frontendUrl}/update-password/${token}`
 
     await mailSender(
       email,

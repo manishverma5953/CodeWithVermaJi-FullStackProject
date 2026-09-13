@@ -52,7 +52,8 @@ exports.capturePayment = async (req, res) => {
   const options = {
     amount: total_amount * 100,
     currency: "INR",
-    receipt: Math.random(Date.now()).toString(),
+    // Unique receipt id (the old Math.random(Date.now()) ignored its argument).
+    receipt: `receipt_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
   }
 
   try {
@@ -98,8 +99,15 @@ exports.verifyPayment = async (req, res) => {
     .digest("hex")
 
   if (expectedSignature === razorpay_signature) {
-    await enrollStudents(courses, userId, res)
-    return res.status(200).json({ success: true, message: "Payment Verified" })
+    try {
+      await enrollStudents(courses, userId)
+      return res
+        .status(200)
+        .json({ success: true, message: "Payment Verified" })
+    } catch (error) {
+      console.log(error)
+      return res.status(500).json({ success: false, message: error.message })
+    }
   }
 
   return res.status(200).json({ success: false, message: "Payment Failed" })
@@ -130,6 +138,10 @@ exports.sendPaymentSuccessEmail = async (req, res) => {
         paymentId
       )
     )
+    // Previously the success path sent no response, leaving the request hanging.
+    return res
+      .status(200)
+      .json({ success: true, message: "Payment success email sent" })
   } catch (error) {
     console.log("error in sending mail", error)
     return res
@@ -139,48 +151,49 @@ exports.sendPaymentSuccessEmail = async (req, res) => {
 }
 
 // enroll the student in the courses
-const enrollStudents = async (courses, userId, res) => {
+// Throws on failure so the caller (verifyPayment) owns the single HTTP response.
+// This avoids the "headers already sent" crash that happened when both this
+// function and verifyPayment tried to respond.
+const enrollStudents = async (courses, userId) => {
   if (!courses || !userId) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Please Provide Course ID and User ID" })
+    throw new Error("Please Provide Course ID and User ID")
   }
 
   for (const courseId of courses) {
-    try {
-      // Find the course and enroll the student in it
-      const enrolledCourse = await Course.findOneAndUpdate(
-        { _id: courseId },
-        { $push: { studentsEnroled: userId } },
-        { new: true }
-      )
+    // Find the course and enroll the student in it
+    const enrolledCourse = await Course.findOneAndUpdate(
+      { _id: courseId },
+      { $push: { studentsEnroled: userId } },
+      { new: true }
+    )
 
-      if (!enrolledCourse) {
-        return res
-          .status(500)
-          .json({ success: false, error: "Course not found" })
-      }
-      console.log("Updated course: ", enrolledCourse)
+    if (!enrolledCourse) {
+      throw new Error("Course not found")
+    }
+    console.log("Updated course: ", enrolledCourse)
 
-      const courseProgress = await CourseProgress.create({
-        courseID: courseId,
-        userId: userId,
-        completedVideos: [],
-      })
-      // Find the student and add the course to their list of enrolled courses
-      const enrolledStudent = await User.findByIdAndUpdate(
-        userId,
-        {
-          $push: {
-            courses: courseId,
-            courseProgress: courseProgress._id,
-          },
+    const courseProgress = await CourseProgress.create({
+      courseID: courseId,
+      userId: userId,
+      completedVideos: [],
+    })
+    // Find the student and add the course to their list of enrolled courses
+    const enrolledStudent = await User.findByIdAndUpdate(
+      userId,
+      {
+        $push: {
+          courses: courseId,
+          courseProgress: courseProgress._id,
         },
-        { new: true }
-      )
+      },
+      { new: true }
+    )
 
-      console.log("Enrolled student: ", enrolledStudent)
-      // Send an email notification to the enrolled student
+    console.log("Enrolled student: ", enrolledStudent)
+
+    // The enrollment above already succeeded and payment was taken, so a failure
+    // to send the confirmation email must NOT fail the enrollment. Log and move on.
+    try {
       const emailResponse = await mailSender(
         enrolledStudent.email,
         `Successfully Enrolled into ${enrolledCourse.courseName}`,
@@ -189,11 +202,9 @@ const enrollStudents = async (courses, userId, res) => {
           `${enrolledStudent.firstName} ${enrolledStudent.lastName}`
         )
       )
-
       console.log("Email sent successfully: ", emailResponse.response)
-    } catch (error) {
-      console.log(error)
-      return res.status(400).json({ success: false, error: error.message })
+    } catch (emailError) {
+      console.log("Enrollment email failed (enrollment still succeeded):", emailError.message)
     }
   }
 }

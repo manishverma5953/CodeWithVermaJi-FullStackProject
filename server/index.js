@@ -13,11 +13,11 @@ const { cloudinaryConnect } = require("./config/cloudinary");
 const fileUpload = require("express-fileupload");
 const dotenv = require("dotenv");
 
-// Setting up port number
-const PORT = process.env.PORT || 4000;
-
-// Loading environment variables from .env file
+// Load environment variables FIRST, before anything reads process.env.
 dotenv.config();
+
+// Setting up port number (Render injects PORT; falls back to 4000 locally)
+const PORT = process.env.PORT || 4000;
 
 // Connecting to database
 database.connect();
@@ -25,9 +25,12 @@ database.connect();
 // Middlewares
 app.use(express.json());
 app.use(cookieParser());
+// Lock CORS to your frontend by setting CORS_ORIGIN (e.g.
+// https://codewithvermaji.vercel.app) in the environment. Defaults to "*" so
+// existing behaviour is unchanged until you opt in.
 app.use(
 	cors({
-		origin: "*",
+		origin: process.env.CORS_ORIGIN || "*",
 		credentials: true,
 	})
 );
