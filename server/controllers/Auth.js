@@ -204,7 +204,6 @@ exports.sendotp = async (req, res) => {
     })
     const result = await OTP.findOne({ otp: otp })
     console.log("Result is Generate OTP Func")
-    console.log("OTP", otp)
     console.log("Result", result)
     while (result) {
       otp = otpGenerator.generate(6, {
@@ -212,12 +211,13 @@ exports.sendotp = async (req, res) => {
       })
     }
     const otpPayload = { email, otp }
-    const otpBody = await OTP.create(otpPayload)
-    console.log("OTP Body", otpBody)
+    // Persisting the OTP triggers the pre-save hook that emails it to the user.
+    await OTP.create(otpPayload)
+    // Do NOT return the OTP in the response or log it — that would let anyone
+    // read it from the network tab / logs and bypass email verification.
     res.status(200).json({
       success: true,
       message: `OTP Sent Successfully`,
-      otp,
     })
   } catch (error) {
     console.log(error.message)
