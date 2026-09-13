@@ -44,7 +44,14 @@ export default function InstructorChart({ courses }) {
 
   // Options for the chart
   const options = {
+    responsive: true,
     maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: { color: "#F1F2FF" },
+      },
+    },
   }
 
   return (
@@ -74,7 +81,9 @@ export default function InstructorChart({ courses }) {
           Income
         </button>
       </div>
-      <div className="relative mx-auto aspect-square h-full w-full">
+      {/* Fixed, bounded box so the pie can't overflow the card (Chart.js with
+          maintainAspectRatio:false fills its parent, so the parent must be sized) */}
+      <div className="relative mx-auto h-[320px] w-[320px] max-w-full">
         {/* Render the Pie chart based on the selected chart */}
         <Pie
           data={currChart === "students" ? chartDataStudents : chartIncomeData}
